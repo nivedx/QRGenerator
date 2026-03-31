@@ -10,6 +10,10 @@ namespace QRGenerator;
 
 public partial class Form1 : Form
 {
+    private const int BytesPerPixel = 4; // BGRA / ARGB format = 4 bytes per pixel
+    private const double QrSizePoints = 72; // QR code size in PDF points (1 inch)
+    private const double QrMarginPoints = 20; // Margin from page edge in PDF points
+
     private byte[]? _pdfBytes;
     private string? _originalFileName;
     private int _currentPageIndex;
@@ -99,7 +103,7 @@ public partial class Form1 : Form
                 ImageLockMode.WriteOnly,
                 PixelFormat.Format32bppArgb);
 
-            int srcStride = width * 4;
+            int srcStride = width * BytesPerPixel;
             if (bmpData.Stride == srcStride)
             {
                 Marshal.Copy(rawBytes, 0, bmpData.Scan0, rawBytes.Length);
@@ -180,12 +184,10 @@ public partial class Form1 : Form
             using (var gfx = XGraphics.FromPdfPage(page))
             using (var xImage = XImage.FromFile(tempQrPath))
             {
-                double qrSize = 72;
-                double margin = 20;
-                double x = page.Width.Point - qrSize - margin;
-                double y = page.Height.Point - qrSize - margin;
+                double x = page.Width.Point - QrSizePoints - QrMarginPoints;
+                double y = page.Height.Point - QrSizePoints - QrMarginPoints;
 
-                gfx.DrawImage(xImage, x, y, qrSize, qrSize);
+                gfx.DrawImage(xImage, x, y, QrSizePoints, QrSizePoints);
             }
 
             // Save modified PDF to byte array
@@ -215,7 +217,7 @@ public partial class Form1 : Form
             if (tempQrPath != null && File.Exists(tempQrPath))
             {
                 try { File.Delete(tempQrPath); }
-                catch { /* ignore cleanup errors */ }
+                catch { /* Cleanup of temp file is best-effort; failure is non-critical */ }
             }
         }
     }
