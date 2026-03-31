@@ -78,6 +78,10 @@ partial class Form1
         pictureBoxPreview.SizeMode = PictureBoxSizeMode.Zoom;
         pictureBoxPreview.TabIndex = 0;
         pictureBoxPreview.TabStop = false;
+        pictureBoxPreview.MouseDown += PictureBoxPreview_MouseDown;
+        pictureBoxPreview.MouseMove += PictureBoxPreview_MouseMove;
+        pictureBoxPreview.MouseUp += PictureBoxPreview_MouseUp;
+        pictureBoxPreview.Paint += PictureBoxPreview_Paint;
 
         // btnPrevPage
         btnPrevPage.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
