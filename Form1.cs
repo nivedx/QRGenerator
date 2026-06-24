@@ -11,8 +11,8 @@ namespace QRGenerator;
 
 public partial class Form1 : Form
 {
-    private const int BytesPerPixel = 4; // BGRA / ARGB format = 4 bytes per pixel
-    private const int MinSelectionSize = 5; // Minimum drag size in image pixels to register as a selection
+    private const int BytesPerPixel    = 4;
+    private const int MinSelectionSize = 5;
 
     private byte[]? _pdfBytes;
     private string? _originalFileName;
@@ -21,6 +21,8 @@ public partial class Form1 : Form
     private int _selectedPageIndex = -1;
     private string? _generatedGuid;
     private bool _qrInjected;
+    private bool _isUploading;
+    private OneDriveSettings _settings = new();
 
     // Area-selection state for QR placement
     private bool _isSelectingArea;
@@ -34,17 +36,21 @@ public partial class Form1 : Form
     public Form1()
     {
         InitializeComponent();
+        _settings = OneDriveSettings.Load();
         UpdateButtonStates();
     }
 
     private void UpdateButtonStates()
     {
-        btnSelectPage.Enabled = _pdfBytes != null;
-        btnInjectQR.Enabled = _pdfBytes != null && _selectedPageIndex >= 0 && _isAreaSelected && !_qrInjected;
-        btnQuickInject.Enabled = _pdfBytes != null && !_qrInjected;
-        btnSavePDF.Enabled = _qrInjected;
-        btnPrevPage.Enabled = _pdfBytes != null && _currentPageIndex > 0;
-        btnNextPage.Enabled = _pdfBytes != null && _currentPageIndex < _totalPages - 1;
+        btnSelectPDF.Enabled   = !_isUploading;
+        btnSettings.Enabled    = !_isUploading;
+        btnSelectPage.Enabled  = !_isUploading && _pdfBytes != null;
+        btnInjectQR.Enabled    = !_isUploading && _pdfBytes != null && _selectedPageIndex >= 0 && _isAreaSelected && !_qrInjected;
+        btnQuickInject.Enabled = !_isUploading && _pdfBytes != null && !_qrInjected;
+        btnSavePDF.Enabled     = !_isUploading && _qrInjected;
+        btnPrevPage.Enabled    = !_isUploading && _pdfBytes != null && _currentPageIndex > 0;
+        btnNextPage.Enabled    = !_isUploading && _pdfBytes != null && _currentPageIndex < _totalPages - 1;
+        UseWaitCursor          = _isUploading;
         lblPageInfo.Text = _pdfBytes != null
             ? $"Page {_currentPageIndex + 1} of {_totalPages}"
             : "No PDF loaded";
@@ -53,37 +59,40 @@ public partial class Form1 : Form
 
     private string GetSelectedPageStatus()
     {
+        if (_isUploading)
+            return "Uploading to OneDrive…";
         if (_selectedPageIndex < 0)
             return "No page selected";
         if (_isAreaSelected)
-            return $"Page {_selectedPageIndex + 1} \u2013 Area set";
+            return $"Page {_selectedPageIndex + 1} – Area set";
         if (_isSelectingArea)
-            return $"Page {_selectedPageIndex + 1} \u2013 Draw QR area";
+            return $"Page {_selectedPageIndex + 1} – Draw QR area";
         return $"Selected: Page {_selectedPageIndex + 1}";
     }
+
+    // ── PDF loading ────────────────────────────────────────────────────────
 
     private void BtnSelectPDF_Click(object? sender, EventArgs e)
     {
         using var dialog = new OpenFileDialog
         {
             Filter = "PDF files (*.pdf)|*.pdf",
-            Title = "Select a PDF file"
+            Title  = "Select a PDF file"
         };
 
-        if (dialog.ShowDialog() != DialogResult.OK)
-            return;
+        if (dialog.ShowDialog() != DialogResult.OK) return;
 
         try
         {
-            _pdfBytes = File.ReadAllBytes(dialog.FileName);
-            _originalFileName = Path.GetFileNameWithoutExtension(dialog.FileName);
-            _currentPageIndex = 0;
+            _pdfBytes          = File.ReadAllBytes(dialog.FileName);
+            _originalFileName  = Path.GetFileNameWithoutExtension(dialog.FileName);
+            _currentPageIndex  = 0;
             _selectedPageIndex = -1;
-            _qrInjected = false;
-            _generatedGuid = null;
-            _isSelectingArea = false;
-            _isDragging = false;
-            _isAreaSelected = false;
+            _qrInjected        = false;
+            _generatedGuid     = null;
+            _isSelectingArea   = false;
+            _isDragging        = false;
+            _isAreaSelected    = false;
             pictureBoxPreview.Cursor = Cursors.Default;
 
             using var docReader = DocLib.Instance.GetDocReader(_pdfBytes, new PageDimensions(1080, 1528));
@@ -106,12 +115,12 @@ public partial class Form1 : Form
 
         try
         {
-            using var docReader = DocLib.Instance.GetDocReader(_pdfBytes, new PageDimensions(1080, 1528));
+            using var docReader  = DocLib.Instance.GetDocReader(_pdfBytes, new PageDimensions(1080, 1528));
             using var pageReader = docReader.GetPageReader(_currentPageIndex);
 
             var rawBytes = pageReader.GetImage();
-            var width = pageReader.GetPageWidth();
-            var height = pageReader.GetPageHeight();
+            var width    = pageReader.GetPageWidth();
+            var height   = pageReader.GetPageHeight();
 
             if (rawBytes == null || rawBytes.Length == 0 || width <= 0 || height <= 0)
             {
@@ -120,11 +129,9 @@ public partial class Form1 : Form
                 return;
             }
 
-            var bmp = new Bitmap(width, height, PixelFormat.Format32bppArgb);
-            var bmpData = bmp.LockBits(
-                new Rectangle(0, 0, width, height),
-                ImageLockMode.WriteOnly,
-                PixelFormat.Format32bppArgb);
+            var bmp     = new Bitmap(width, height, PixelFormat.Format32bppArgb);
+            var bmpData = bmp.LockBits(new Rectangle(0, 0, width, height),
+                ImageLockMode.WriteOnly, PixelFormat.Format32bppArgb);
 
             int srcStride = width * BytesPerPixel;
             if (bmpData.Stride == srcStride)
@@ -134,14 +141,11 @@ public partial class Form1 : Form
             else
             {
                 for (int row = 0; row < height; row++)
-                {
                     Marshal.Copy(rawBytes, row * srcStride,
                         bmpData.Scan0 + row * bmpData.Stride, srcStride);
-                }
             }
 
             bmp.UnlockBits(bmpData);
-
             pictureBoxPreview.Image?.Dispose();
             pictureBoxPreview.Image = bmp;
         }
@@ -152,31 +156,31 @@ public partial class Form1 : Form
         }
     }
 
+    // ── Page navigation ────────────────────────────────────────────────────
+
     private void BtnPrevPage_Click(object? sender, EventArgs e)
     {
-        if (_currentPageIndex > 0)
-        {
-            _currentPageIndex--;
-            RenderCurrentPage();
-            UpdateButtonStates();
-        }
+        if (_currentPageIndex <= 0) return;
+        _currentPageIndex--;
+        RenderCurrentPage();
+        UpdateButtonStates();
     }
 
     private void BtnNextPage_Click(object? sender, EventArgs e)
     {
-        if (_currentPageIndex < _totalPages - 1)
-        {
-            _currentPageIndex++;
-            RenderCurrentPage();
-            UpdateButtonStates();
-        }
+        if (_currentPageIndex >= _totalPages - 1) return;
+        _currentPageIndex++;
+        RenderCurrentPage();
+        UpdateButtonStates();
     }
+
+    // ── Area selection ─────────────────────────────────────────────────────
 
     private void BtnSelectPage_Click(object? sender, EventArgs e)
     {
         _selectedPageIndex = _currentPageIndex;
-        _isAreaSelected = false;
-        _isSelectingArea = true;
+        _isAreaSelected    = false;
+        _isSelectingArea   = true;
         pictureBoxPreview.Cursor = Cursors.Cross;
         UpdateButtonStates();
         pictureBoxPreview.Invalidate();
@@ -188,9 +192,9 @@ public partial class Form1 : Form
             _currentPageIndex != _selectedPageIndex || pictureBoxPreview.Image == null)
             return;
 
-        _isDragging = true;
-        _dragStart = e.Location;
-        _dragCurrent = e.Location;
+        _isDragging   = true;
+        _dragStart    = e.Location;
+        _dragCurrent  = e.Location;
         _isAreaSelected = false;
         UpdateButtonStates();
         pictureBoxPreview.Invalidate();
@@ -199,7 +203,6 @@ public partial class Form1 : Form
     private void PictureBoxPreview_MouseMove(object? sender, MouseEventArgs e)
     {
         if (!_isDragging) return;
-
         _dragCurrent = e.Location;
         pictureBoxPreview.Invalidate();
     }
@@ -208,11 +211,11 @@ public partial class Form1 : Form
     {
         if (!_isDragging || e.Button != MouseButtons.Left) return;
 
-        _isDragging = false;
+        _isDragging  = false;
         _dragCurrent = e.Location;
 
         var startImg = ControlToImageCoords(_dragStart);
-        var endImg = ControlToImageCoords(_dragCurrent);
+        var endImg   = ControlToImageCoords(_dragCurrent);
 
         float x = Math.Min(startImg.X, endImg.X);
         float y = Math.Min(startImg.Y, endImg.Y);
@@ -221,10 +224,10 @@ public partial class Form1 : Form
 
         if (w > MinSelectionSize && h > MinSelectionSize)
         {
-            _selectedAreaInImage = new RectangleF(x, y, w, h);
+            _selectedAreaInImage  = new RectangleF(x, y, w, h);
             _selectedAreaImageSize = pictureBoxPreview.Image!.Size;
-            _isAreaSelected = true;
-            _isSelectingArea = false;
+            _isAreaSelected       = true;
+            _isSelectingArea      = false;
             pictureBoxPreview.Cursor = Cursors.Default;
         }
 
@@ -246,16 +249,16 @@ public partial class Form1 : Form
             var displayRect = GetImageDisplayRect();
             if (displayRect.IsEmpty) return;
 
-            float scaleX = (float)displayRect.Width / pictureBoxPreview.Image.Width;
+            float scaleX = (float)displayRect.Width  / pictureBoxPreview.Image.Width;
             float scaleY = (float)displayRect.Height / pictureBoxPreview.Image.Height;
 
             var rect = new Rectangle(
                 (int)(displayRect.X + _selectedAreaInImage.X * scaleX),
                 (int)(displayRect.Y + _selectedAreaInImage.Y * scaleY),
-                (int)(_selectedAreaInImage.Width * scaleX),
+                (int)(_selectedAreaInImage.Width  * scaleX),
                 (int)(_selectedAreaInImage.Height * scaleY));
 
-            using var pen = new Pen(Color.Red, 2) { DashStyle = DashStyle.Dash };
+            using var pen   = new Pen(Color.Red, 2) { DashStyle = DashStyle.Dash };
             using var brush = new SolidBrush(Color.FromArgb(40, Color.Red));
             e.Graphics.FillRectangle(brush, rect);
             e.Graphics.DrawRectangle(pen, rect);
@@ -266,16 +269,16 @@ public partial class Form1 : Form
     {
         if (pictureBoxPreview.Image == null) return Rectangle.Empty;
 
-        var imgSize = pictureBoxPreview.Image.Size;
+        var imgSize  = pictureBoxPreview.Image.Size;
         var ctrlSize = pictureBoxPreview.ClientSize;
 
-        float ratioX = (float)ctrlSize.Width / imgSize.Width;
+        float ratioX = (float)ctrlSize.Width  / imgSize.Width;
         float ratioY = (float)ctrlSize.Height / imgSize.Height;
-        float ratio = Math.Min(ratioX, ratioY);
+        float ratio  = Math.Min(ratioX, ratioY);
 
-        int displayW = (int)(imgSize.Width * ratio);
+        int displayW = (int)(imgSize.Width  * ratio);
         int displayH = (int)(imgSize.Height * ratio);
-        int displayX = (ctrlSize.Width - displayW) / 2;
+        int displayX = (ctrlSize.Width  - displayW) / 2;
         int displayY = (ctrlSize.Height - displayH) / 2;
 
         return new Rectangle(displayX, displayY, displayW, displayH);
@@ -284,156 +287,114 @@ public partial class Form1 : Form
     private PointF ControlToImageCoords(Point controlPt)
     {
         var displayRect = GetImageDisplayRect();
-        if (displayRect.IsEmpty || pictureBoxPreview.Image == null)
-            return PointF.Empty;
+        if (displayRect.IsEmpty || pictureBoxPreview.Image == null) return PointF.Empty;
 
-        float imgX = (controlPt.X - displayRect.X) * pictureBoxPreview.Image.Width / (float)displayRect.Width;
+        float imgX = (controlPt.X - displayRect.X) * pictureBoxPreview.Image.Width  / (float)displayRect.Width;
         float imgY = (controlPt.Y - displayRect.Y) * pictureBoxPreview.Image.Height / (float)displayRect.Height;
 
-        imgX = Math.Clamp(imgX, 0, pictureBoxPreview.Image.Width);
-        imgY = Math.Clamp(imgY, 0, pictureBoxPreview.Image.Height);
-
-        return new PointF(imgX, imgY);
+        return new PointF(
+            Math.Clamp(imgX, 0, pictureBoxPreview.Image.Width),
+            Math.Clamp(imgY, 0, pictureBoxPreview.Image.Height));
     }
 
-    private static Rectangle GetDragRectangle(Point start, Point end)
+    private static Rectangle GetDragRectangle(Point start, Point end) =>
+        new(Math.Min(start.X, end.X), Math.Min(start.Y, end.Y),
+            Math.Abs(end.X - start.X), Math.Abs(end.Y - start.Y));
+
+    // ── OneDrive settings ──────────────────────────────────────────────────
+
+    private void BtnSettings_Click(object? sender, EventArgs e)
     {
-        return new Rectangle(
-            Math.Min(start.X, end.X),
-            Math.Min(start.Y, end.Y),
-            Math.Abs(end.X - start.X),
-            Math.Abs(end.Y - start.Y));
+        using var form = new SettingsForm(_settings);
+        if (form.ShowDialog(this) == DialogResult.OK && form.Result != null)
+            _settings = form.Result;
     }
 
-    private void BtnInjectQR_Click(object? sender, EventArgs e)
+    private bool ValidateOneDriveSettings()
+    {
+        if (string.IsNullOrWhiteSpace(_settings.TenantId)            ||
+            string.IsNullOrWhiteSpace(_settings.ClientId)            ||
+            string.IsNullOrWhiteSpace(_settings.ClientSecret)        ||
+            string.IsNullOrWhiteSpace(_settings.UserEmail)           ||
+            string.IsNullOrWhiteSpace(_settings.BaseVerificationUrl))
+        {
+            MessageBox.Show(
+                "OneDrive settings are not configured.\n" +
+                "Click '⚙ OneDrive Settings' to enter your Azure credentials and base URL.",
+                "Configuration Required", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return false;
+        }
+        return true;
+    }
+
+    // ── QR injection ───────────────────────────────────────────────────────
+
+    private async void BtnInjectQR_Click(object? sender, EventArgs e)
     {
         if (_pdfBytes == null || _selectedPageIndex < 0 || !_isAreaSelected) return;
-
-        string? tempQrPath = null;
-        try
-        {
-            _generatedGuid = Guid.NewGuid().ToString();
-            var createdDate = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
-            var qrData = $"Bank Name: ADIB\nCreated Date: {createdDate}\nID: {_generatedGuid}";
-
-            // Generate QR code image
-            using var qrGenerator = new QRCodeGenerator();
-            using var qrCodeData = qrGenerator.CreateQrCode(qrData, QRCodeGenerator.ECCLevel.Q);
-            using var qrCode = new QRCode(qrCodeData);
-            using var qrBitmap = qrCode.GetGraphic(20);
-
-            // Save QR code to a temporary PNG file for PDFsharp to load
-            tempQrPath = Path.Combine(Path.GetTempPath(), $"qr_{Guid.NewGuid()}.png");
-            qrBitmap.Save(tempQrPath, ImageFormat.Png);
-
-            // Open PDF with PDFsharp and inject QR code
-            using var pdfStream = new MemoryStream(_pdfBytes);
-            var document = PdfReader.Open(pdfStream, PdfDocumentOpenMode.Modify);
-            var page = document.Pages[_selectedPageIndex];
-
-            using (var gfx = XGraphics.FromPdfPage(page))
-            using (var xImage = XImage.FromFile(tempQrPath))
-            {
-                // Convert selected area from image coordinates to PDF coordinates
-                double scaleX = page.Width.Point / _selectedAreaImageSize.Width;
-                double scaleY = page.Height.Point / _selectedAreaImageSize.Height;
-
-                double pdfX = _selectedAreaInImage.X * scaleX;
-                double pdfY = _selectedAreaInImage.Y * scaleY;
-                double pdfW = _selectedAreaInImage.Width * scaleX;
-                double pdfH = _selectedAreaInImage.Height * scaleY;
-
-                gfx.DrawImage(xImage, pdfX, pdfY, pdfW, pdfH);
-            }
-
-            // Save modified PDF to byte array
-            using var outputStream = new MemoryStream();
-            document.Save(outputStream);
-            _pdfBytes = outputStream.ToArray();
-
-            _qrInjected = true;
-
-            // Show the injected page in preview
-            _currentPageIndex = _selectedPageIndex;
-            RenderCurrentPage();
-            UpdateButtonStates();
-
-            MessageBox.Show(
-                $"QR Code injected on page {_selectedPageIndex + 1}.\n\nEmbedded Data:\n{qrData}",
-                "QR Code Injected",
-                MessageBoxButtons.OK, MessageBoxIcon.Information);
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show($"Error injecting QR code: {ex.Message}", "Error",
-                MessageBoxButtons.OK, MessageBoxIcon.Error);
-        }
-        finally
-        {
-            if (tempQrPath != null && File.Exists(tempQrPath))
-            {
-                try { File.Delete(tempQrPath); }
-                catch { /* Cleanup of temp file is best-effort; failure is non-critical */ }
-            }
-        }
+        if (!ValidateOneDriveSettings()) return;
+        await PerformInjectionAsync(isQuickInject: false);
     }
 
-    private void BtnQuickInject_Click(object? sender, EventArgs e)
+    private async void BtnQuickInject_Click(object? sender, EventArgs e)
     {
         if (_pdfBytes == null) return;
+        if (!ValidateOneDriveSettings()) return;
+        await PerformInjectionAsync(isQuickInject: true);
+    }
 
+    private async Task PerformInjectionAsync(bool isQuickInject)
+    {
         string? tempQrPath = null;
         try
         {
+            // 1. Generate GUID → filename → verification URL
             _generatedGuid = Guid.NewGuid().ToString();
-            var createdDate = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
-            var qrData = $"Bank Name: ADIB\nCreated Date: {createdDate}\nID: {_generatedGuid}";
+            var fileName        = $"{_generatedGuid}.pdf";
+            var verificationUrl = $"{_settings.BaseVerificationUrl.TrimEnd('/')}/{fileName}";
 
-            // Generate QR code image
+            // 2. Generate QR code image containing the verification URL
             using var qrGenerator = new QRCodeGenerator();
-            using var qrCodeData = qrGenerator.CreateQrCode(qrData, QRCodeGenerator.ECCLevel.Q);
-            using var qrCode = new QRCode(qrCodeData);
-            using var qrBitmap = qrCode.GetGraphic(20);
+            using var qrCodeData  = qrGenerator.CreateQrCode(verificationUrl, QRCodeGenerator.ECCLevel.Q);
+            using var qrCode      = new QRCode(qrCodeData);
+            using var qrBitmap    = qrCode.GetGraphic(20);
 
-            // Save QR code to a temporary PNG file for PDFsharp to load
             tempQrPath = Path.Combine(Path.GetTempPath(), $"qr_{Guid.NewGuid()}.png");
             qrBitmap.Save(tempQrPath, ImageFormat.Png);
 
-            // Open PDF with PDFsharp and inject QR code on the last page, lower-right corner
-            using var pdfStream = new MemoryStream(_pdfBytes);
-            var document = PdfReader.Open(pdfStream, PdfDocumentOpenMode.Modify);
-            var lastPageIndex = document.PageCount - 1;
-            var page = document.Pages[lastPageIndex];
+            // 3. Inject QR into PDF and replace _pdfBytes
+            //    (synchronous — PDF resources freed before we await the upload)
+            _pdfBytes = InjectQrIntoPdf(tempQrPath, isQuickInject, out int targetPageIndex);
 
-            using (var gfx = XGraphics.FromPdfPage(page))
-            using (var xImage = XImage.FromFile(tempQrPath))
-            {
-                // Place QR code in the lower-right corner with a small margin
-                const double qrSize = 80; // points (~1.1 inch)
-                const double margin = 20; // points margin from edges
-                double pdfX = page.Width.Point - qrSize - margin;
-                double pdfY = page.Height.Point - qrSize - margin;
-
-                gfx.DrawImage(xImage, pdfX, pdfY, qrSize, qrSize);
-            }
-
-            // Save modified PDF to byte array
-            using var outputStream = new MemoryStream();
-            document.Save(outputStream);
-            _pdfBytes = outputStream.ToArray();
-
-            _qrInjected = true;
-            _selectedPageIndex = lastPageIndex;
-
-            // Show the injected page in preview
-            _currentPageIndex = lastPageIndex;
+            _qrInjected        = true;
+            _selectedPageIndex = targetPageIndex;
+            _currentPageIndex  = targetPageIndex;
             RenderCurrentPage();
+
+            // 4. Upload the modified PDF to OneDrive
+            _isUploading = true;
             UpdateButtonStates();
 
-            MessageBox.Show(
-                $"QR Code injected on last page (page {lastPageIndex + 1}), lower-right corner.\n\nEmbedded Data:\n{qrData}",
-                "QR Code Injected",
-                MessageBoxButtons.OK, MessageBoxIcon.Information);
+            try
+            {
+                using var uploader = new OneDriveUploader();
+                var token = await uploader.AcquireTokenAsync(
+                    _settings.TenantId, _settings.ClientId, _settings.ClientSecret);
+                await uploader.UploadPdfAsync(
+                    token, _settings.UserEmail, _settings.TargetFolder, fileName, _pdfBytes);
+
+                MessageBox.Show(
+                    $"QR Code injected and document uploaded to OneDrive.\n\n" +
+                    $"Verification URL (embedded in QR):\n{verificationUrl}",
+                    "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    $"QR Code injected successfully, but the OneDrive upload failed:\n\n{ex.Message}\n\n" +
+                    $"Use 'Save PDF' to save the document locally.",
+                    "Upload Failed", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
         }
         catch (Exception ex)
         {
@@ -442,29 +403,67 @@ public partial class Form1 : Form
         }
         finally
         {
+            _isUploading = false;
+            UpdateButtonStates();
             if (tempQrPath != null && File.Exists(tempQrPath))
-            {
-                try { File.Delete(tempQrPath); }
-                catch { /* Cleanup of temp file is best-effort; failure is non-critical */ }
-            }
+                try { File.Delete(tempQrPath); } catch { /* best-effort cleanup */ }
         }
     }
+
+    // Synchronous helper — opens the PDF, draws the QR, returns the new byte array.
+    // All PDF/GDI resources are disposed before this method returns so that the
+    // subsequent async upload does not hold on to large MemoryStream objects.
+    private byte[] InjectQrIntoPdf(string tempQrPath, bool isQuickInject, out int targetPageIndex)
+    {
+        using var pdfStream = new MemoryStream(_pdfBytes!);
+        using var document  = PdfReader.Open(pdfStream, PdfDocumentOpenMode.Modify);
+
+        if (isQuickInject)
+        {
+            targetPageIndex = document.PageCount - 1;
+            var page = document.Pages[targetPageIndex];
+            using var gfx  = XGraphics.FromPdfPage(page);
+            using var xImg = XImage.FromFile(tempQrPath);
+            const double qrSize = 80, margin = 20;
+            gfx.DrawImage(xImg,
+                page.Width.Point  - qrSize - margin,
+                page.Height.Point - qrSize - margin,
+                qrSize, qrSize);
+        }
+        else
+        {
+            targetPageIndex = _selectedPageIndex;
+            var page = document.Pages[targetPageIndex];
+            using var gfx  = XGraphics.FromPdfPage(page);
+            using var xImg = XImage.FromFile(tempQrPath);
+            double scaleX = page.Width.Point  / _selectedAreaImageSize.Width;
+            double scaleY = page.Height.Point / _selectedAreaImageSize.Height;
+            gfx.DrawImage(xImg,
+                _selectedAreaInImage.X      * scaleX,
+                _selectedAreaInImage.Y      * scaleY,
+                _selectedAreaInImage.Width  * scaleX,
+                _selectedAreaInImage.Height * scaleY);
+        }
+
+        using var output = new MemoryStream();
+        document.Save(output);
+        return output.ToArray();
+    }
+
+    // ── Save ───────────────────────────────────────────────────────────────
 
     private void BtnSavePDF_Click(object? sender, EventArgs e)
     {
         if (_pdfBytes == null || !_qrInjected) return;
 
-        var defaultFileName = $"{_originalFileName}_{_generatedGuid}.pdf";
-
         using var dialog = new SaveFileDialog
         {
-            Filter = "PDF files (*.pdf)|*.pdf",
-            Title = "Save PDF",
-            FileName = defaultFileName
+            Filter   = "PDF files (*.pdf)|*.pdf",
+            Title    = "Save PDF",
+            FileName = $"{_generatedGuid}.pdf"
         };
 
-        if (dialog.ShowDialog() != DialogResult.OK)
-            return;
+        if (dialog.ShowDialog() != DialogResult.OK) return;
 
         try
         {
