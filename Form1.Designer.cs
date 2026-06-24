@@ -30,6 +30,7 @@ partial class Form1
     {
         btnSelectPDF = new Button();
         lblFileName = new Label();
+        btnSettings = new Button();
         panelPreview = new Panel();
         pictureBoxPreview = new PictureBox();
         btnPrevPage = new Button();
@@ -56,10 +57,20 @@ partial class Form1
         // lblFileName
         lblFileName.Location = new Point(140, 12);
         lblFileName.Name = "lblFileName";
-        lblFileName.Size = new Size(640, 35);
+        lblFileName.Size = new Size(628, 35);
         lblFileName.TabIndex = 1;
         lblFileName.Text = "No file selected";
         lblFileName.TextAlign = ContentAlignment.MiddleLeft;
+
+        // btnSettings
+        btnSettings.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        btnSettings.Location = new Point(780, 12);
+        btnSettings.Name = "btnSettings";
+        btnSettings.Size = new Size(192, 35);
+        btnSettings.TabIndex = 11;
+        btnSettings.Text = "⚙ OneDrive Settings";
+        btnSettings.UseVisualStyleBackColor = true;
+        btnSettings.Click += BtnSettings_Click;
 
         // panelPreview
         panelPreview.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
@@ -168,6 +179,7 @@ partial class Form1
         ClientSize = new Size(984, 651);
         Controls.Add(btnSelectPDF);
         Controls.Add(lblFileName);
+        Controls.Add(btnSettings);
         Controls.Add(panelPreview);
         Controls.Add(btnPrevPage);
         Controls.Add(lblPageInfo);
@@ -199,4 +211,5 @@ partial class Form1
     private Button btnInjectQR;
     private Button btnQuickInject;
     private Button btnSavePDF;
+    private Button btnSettings;
 }
