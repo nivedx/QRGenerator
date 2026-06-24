@@ -1,4 +1,5 @@
 using System.Net.Http.Headers;
+using System.Text;
 using System.Text.Json;
 
 namespace QRGenerator;
@@ -33,8 +34,9 @@ public sealed class OneDriveUploader : IDisposable
         return tok.GetString()!;
     }
 
-    // Simple PUT upload — suitable for PDFs up to ~4 MB (Graph API limit for single-request uploads).
-    public async Task UploadPdfAsync(string token, string userEmail, string targetFolder,
+    // Uploads pdfBytes to OneDrive and returns the Graph item ID of the uploaded file.
+    // Suitable for PDFs up to ~4 MB (Graph API single-request limit).
+    public async Task<string> UploadPdfAsync(string token, string userEmail, string targetFolder,
         string fileName, byte[] pdfBytes)
     {
         var folder = targetFolder.Trim('/');
@@ -49,12 +51,42 @@ public sealed class OneDriveUploader : IDisposable
         req.Content.Headers.ContentType = new MediaTypeHeaderValue("application/pdf");
 
         var resp = await _http.SendAsync(req);
+        var raw  = await resp.Content.ReadAsStringAsync();
+
         if (!resp.IsSuccessStatusCode)
-        {
-            var raw = await resp.Content.ReadAsStringAsync();
             throw new InvalidOperationException(
                 $"Upload failed ({(int)resp.StatusCode} {resp.StatusCode}): {raw}");
-        }
+
+        using var doc = JsonDocument.Parse(raw);
+        return doc.RootElement.GetProperty("id").GetString()!;
+    }
+
+    // Creates an anonymous view-only shareable link for the given OneDrive item.
+    // Returns the public webUrl that can be embedded in the QR code.
+    public async Task<string> CreateShareLinkAsync(string token, string userEmail, string itemId)
+    {
+        var url  = $"{GraphBase}/users/{userEmail}/drive/items/{itemId}/createLink";
+        var json = """{"type":"view","scope":"anonymous"}""";
+
+        using var req = new HttpRequestMessage(HttpMethod.Post, url)
+        {
+            Content = new StringContent(json, Encoding.UTF8, "application/json")
+        };
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var resp = await _http.SendAsync(req);
+        var raw  = await resp.Content.ReadAsStringAsync();
+
+        if (!resp.IsSuccessStatusCode)
+            throw new InvalidOperationException(
+                $"Share link creation failed ({(int)resp.StatusCode} {resp.StatusCode}): {raw}");
+
+        using var doc = JsonDocument.Parse(raw);
+        return doc.RootElement
+                   .GetProperty("link")
+                   .GetProperty("webUrl")
+                   .GetString()
+               ?? throw new InvalidOperationException("Share link URL was empty in the response.");
     }
 
     public void Dispose() => _http.Dispose();

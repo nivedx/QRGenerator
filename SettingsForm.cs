@@ -7,7 +7,6 @@ public class SettingsForm : Form
     private readonly TextBox _txtClientSecret;
     private readonly TextBox _txtUserEmail;
     private readonly TextBox _txtTargetFolder;
-    private readonly TextBox _txtBaseUrl;
 
     [System.ComponentModel.DesignerSerializationVisibility(
         System.ComponentModel.DesignerSerializationVisibility.Hidden)]
@@ -16,7 +15,7 @@ public class SettingsForm : Form
     public SettingsForm(OneDriveSettings current)
     {
         Text            = "OneDrive Settings";
-        ClientSize      = new Size(520, 368);
+        ClientSize      = new Size(520, 310);
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox     = false;
         MinimizeBox     = false;
@@ -76,18 +75,6 @@ public class SettingsForm : Form
         });
         y += rh + 18 + gap;
 
-        // ── Base Verification URL ─────────────────────────────────────────
-        Controls.Add(new Label { Text = "Base Verification URL *", Left = lx, Top = y + 3, Width = lw });
-        _txtBaseUrl = new TextBox { Left = tx, Top = y, Width = tw, Text = current.BaseVerificationUrl };
-        Controls.Add(_txtBaseUrl);
-        Controls.Add(new Label
-        {
-            Text = "The GUID filename is appended here to form the QR verification URL.",
-            Left = tx, Top = y + rh + 2, Width = tw, Height = 14,
-            Font = new Font("Segoe UI", 7.5f), ForeColor = Color.Gray, AutoSize = false
-        });
-        y += rh + 18 + gap + 4;
-
         // ── Buttons ───────────────────────────────────────────────────────
         var btnSave = new Button { Text = "Save", Left = tx, Top = y, Width = 90, Height = 30 };
         var btnCancel = new Button
@@ -101,12 +88,11 @@ public class SettingsForm : Form
             if (!ValidateInputs()) return;
             Result = new OneDriveSettings
             {
-                TenantId            = _txtTenantId.Text.Trim(),
-                ClientId            = _txtClientId.Text.Trim(),
-                ClientSecret        = _txtClientSecret.Text.Trim(),
-                UserEmail           = _txtUserEmail.Text.Trim(),
-                TargetFolder        = _txtTargetFolder.Text.Trim(),
-                BaseVerificationUrl = _txtBaseUrl.Text.Trim()
+                TenantId     = _txtTenantId.Text.Trim(),
+                ClientId     = _txtClientId.Text.Trim(),
+                ClientSecret = _txtClientSecret.Text.Trim(),
+                UserEmail    = _txtUserEmail.Text.Trim(),
+                TargetFolder = _txtTargetFolder.Text.Trim()
             };
             Result.Save();
             DialogResult = DialogResult.OK;
@@ -125,7 +111,6 @@ public class SettingsForm : Form
         if (string.IsNullOrWhiteSpace(_txtClientId.Text))     errors.Add("• Client ID is required.");
         if (string.IsNullOrWhiteSpace(_txtClientSecret.Text)) errors.Add("• Client Secret is required.");
         if (string.IsNullOrWhiteSpace(_txtUserEmail.Text))    errors.Add("• User Email / UPN is required.");
-        if (string.IsNullOrWhiteSpace(_txtBaseUrl.Text))      errors.Add("• Base Verification URL is required.");
 
         if (errors.Count > 0)
         {

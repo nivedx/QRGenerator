@@ -8,8 +8,7 @@ public class OneDriveSettings
     public string ClientId            { get; set; } = "";
     public string ClientSecret        { get; set; } = "";
     public string UserEmail           { get; set; } = "";
-    public string TargetFolder        { get; set; } = "";
-    public string BaseVerificationUrl { get; set; } = "";
+    public string TargetFolder { get; set; } = "";
 
     private static readonly string SettingsPath = Path.Combine(
         AppDomain.CurrentDomain.BaseDirectory, "onedrive-settings.json");

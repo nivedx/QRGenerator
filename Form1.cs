@@ -312,15 +312,14 @@ public partial class Form1 : Form
 
     private bool ValidateOneDriveSettings()
     {
-        if (string.IsNullOrWhiteSpace(_settings.TenantId)            ||
-            string.IsNullOrWhiteSpace(_settings.ClientId)            ||
-            string.IsNullOrWhiteSpace(_settings.ClientSecret)        ||
-            string.IsNullOrWhiteSpace(_settings.UserEmail)           ||
-            string.IsNullOrWhiteSpace(_settings.BaseVerificationUrl))
+        if (string.IsNullOrWhiteSpace(_settings.TenantId)     ||
+            string.IsNullOrWhiteSpace(_settings.ClientId)     ||
+            string.IsNullOrWhiteSpace(_settings.ClientSecret) ||
+            string.IsNullOrWhiteSpace(_settings.UserEmail))
         {
             MessageBox.Show(
                 "OneDrive settings are not configured.\n" +
-                "Click '⚙ OneDrive Settings' to enter your Azure credentials and base URL.",
+                "Click '⚙ OneDrive Settings' to enter your Azure credentials.",
                 "Configuration Required", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return false;
         }
@@ -346,24 +345,35 @@ public partial class Form1 : Form
     private async Task PerformInjectionAsync(bool isQuickInject)
     {
         string? tempQrPath = null;
+        _isUploading = true;
+        UpdateButtonStates();
+
         try
         {
-            // 1. Generate GUID → filename → verification URL
             _generatedGuid = Guid.NewGuid().ToString();
-            var fileName        = $"{_generatedGuid}.pdf";
-            var verificationUrl = $"{_settings.BaseVerificationUrl.TrimEnd('/')}/{fileName}";
+            var fileName = $"{_generatedGuid}.pdf";
 
-            // 2. Generate QR code image containing the verification URL
+            using var uploader = new OneDriveUploader();
+            var token = await uploader.AcquireTokenAsync(
+                _settings.TenantId, _settings.ClientId, _settings.ClientSecret);
+
+            // Step 1: Upload original PDF to claim the GUID filename on OneDrive.
+            var itemId = await uploader.UploadPdfAsync(
+                token, _settings.UserEmail, _settings.TargetFolder, fileName, _pdfBytes!);
+
+            // Step 2: Create a public shareable link — this is the URL that goes in the QR.
+            var shareableUrl = await uploader.CreateShareLinkAsync(
+                token, _settings.UserEmail, itemId);
+
+            // Step 3: Generate QR code containing the real, publicly accessible URL.
             using var qrGenerator = new QRCodeGenerator();
-            using var qrCodeData  = qrGenerator.CreateQrCode(verificationUrl, QRCodeGenerator.ECCLevel.Q);
+            using var qrCodeData  = qrGenerator.CreateQrCode(shareableUrl, QRCodeGenerator.ECCLevel.Q);
             using var qrCode      = new QRCode(qrCodeData);
             using var qrBitmap    = qrCode.GetGraphic(20);
-
             tempQrPath = Path.Combine(Path.GetTempPath(), $"qr_{Guid.NewGuid()}.png");
             qrBitmap.Save(tempQrPath, ImageFormat.Png);
 
-            // 3. Inject QR into PDF and replace _pdfBytes
-            //    (synchronous — PDF resources freed before we await the upload)
+            // Step 4: Inject QR into a local copy of the PDF.
             _pdfBytes = InjectQrIntoPdf(tempQrPath, isQuickInject, out int targetPageIndex);
 
             _qrInjected        = true;
@@ -371,34 +381,31 @@ public partial class Form1 : Form
             _currentPageIndex  = targetPageIndex;
             RenderCurrentPage();
 
-            // 4. Upload the modified PDF to OneDrive
-            _isUploading = true;
-            UpdateButtonStates();
-
+            // Step 5: Re-upload the QR-stamped PDF, overwriting the placeholder on OneDrive.
             try
             {
-                using var uploader = new OneDriveUploader();
-                var token = await uploader.AcquireTokenAsync(
-                    _settings.TenantId, _settings.ClientId, _settings.ClientSecret);
                 await uploader.UploadPdfAsync(
                     token, _settings.UserEmail, _settings.TargetFolder, fileName, _pdfBytes);
 
                 MessageBox.Show(
-                    $"QR Code injected and document uploaded to OneDrive.\n\n" +
-                    $"Verification URL (embedded in QR):\n{verificationUrl}",
+                    $"QR stamped and document published to OneDrive.\n\n" +
+                    $"Verification URL (embedded in QR):\n{shareableUrl}",
                     "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (Exception ex)
             {
+                // QR is injected locally; only the re-upload failed.
                 MessageBox.Show(
-                    $"QR Code injected successfully, but the OneDrive upload failed:\n\n{ex.Message}\n\n" +
-                    $"Use 'Save PDF' to save the document locally.",
-                    "Upload Failed", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    $"QR injected, but re-upload of the stamped PDF failed:\n\n{ex.Message}\n\n" +
+                    $"OneDrive currently holds the un-stamped version.\n" +
+                    $"Use 'Save PDF' to save locally, then upload it manually.",
+                    "Re-upload Failed", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Error injecting QR code: {ex.Message}", "Error",
+            if (!_qrInjected) _generatedGuid = null;
+            MessageBox.Show($"Error: {ex.Message}", "Error",
                 MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
         finally
@@ -406,7 +413,7 @@ public partial class Form1 : Form
             _isUploading = false;
             UpdateButtonStates();
             if (tempQrPath != null && File.Exists(tempQrPath))
-                try { File.Delete(tempQrPath); } catch { /* best-effort cleanup */ }
+                try { File.Delete(tempQrPath); } catch { }
         }
     }
 
