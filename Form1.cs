@@ -41,6 +41,7 @@ public partial class Form1 : Form
     {
         btnSelectPage.Enabled = _pdfBytes != null;
         btnInjectQR.Enabled = _pdfBytes != null && _selectedPageIndex >= 0 && _isAreaSelected && !_qrInjected;
+        btnQuickInject.Enabled = _pdfBytes != null && !_qrInjected;
         btnSavePDF.Enabled = _qrInjected;
         btnPrevPage.Enabled = _pdfBytes != null && _currentPageIndex > 0;
         btnNextPage.Enabled = _pdfBytes != null && _currentPageIndex < _totalPages - 1;
@@ -359,6 +360,78 @@ public partial class Form1 : Form
 
             MessageBox.Show(
                 $"QR Code injected on page {_selectedPageIndex + 1}.\n\nEmbedded Data:\n{qrData}",
+                "QR Code Injected",
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Error injecting QR code: {ex.Message}", "Error",
+                MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+        finally
+        {
+            if (tempQrPath != null && File.Exists(tempQrPath))
+            {
+                try { File.Delete(tempQrPath); }
+                catch { /* Cleanup of temp file is best-effort; failure is non-critical */ }
+            }
+        }
+    }
+
+    private void BtnQuickInject_Click(object? sender, EventArgs e)
+    {
+        if (_pdfBytes == null) return;
+
+        string? tempQrPath = null;
+        try
+        {
+            _generatedGuid = Guid.NewGuid().ToString();
+            var createdDate = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+            var qrData = $"Bank Name: ADIB\nCreated Date: {createdDate}\nID: {_generatedGuid}";
+
+            // Generate QR code image
+            using var qrGenerator = new QRCodeGenerator();
+            using var qrCodeData = qrGenerator.CreateQrCode(qrData, QRCodeGenerator.ECCLevel.Q);
+            using var qrCode = new QRCode(qrCodeData);
+            using var qrBitmap = qrCode.GetGraphic(20);
+
+            // Save QR code to a temporary PNG file for PDFsharp to load
+            tempQrPath = Path.Combine(Path.GetTempPath(), $"qr_{Guid.NewGuid()}.png");
+            qrBitmap.Save(tempQrPath, ImageFormat.Png);
+
+            // Open PDF with PDFsharp and inject QR code on the last page, lower-right corner
+            using var pdfStream = new MemoryStream(_pdfBytes);
+            var document = PdfReader.Open(pdfStream, PdfDocumentOpenMode.Modify);
+            var lastPageIndex = document.PageCount - 1;
+            var page = document.Pages[lastPageIndex];
+
+            using (var gfx = XGraphics.FromPdfPage(page))
+            using (var xImage = XImage.FromFile(tempQrPath))
+            {
+                // Place QR code in the lower-right corner with a small margin
+                const double qrSize = 80; // points (~1.1 inch)
+                const double margin = 20; // points margin from edges
+                double pdfX = page.Width.Point - qrSize - margin;
+                double pdfY = page.Height.Point - qrSize - margin;
+
+                gfx.DrawImage(xImage, pdfX, pdfY, qrSize, qrSize);
+            }
+
+            // Save modified PDF to byte array
+            using var outputStream = new MemoryStream();
+            document.Save(outputStream);
+            _pdfBytes = outputStream.ToArray();
+
+            _qrInjected = true;
+            _selectedPageIndex = lastPageIndex;
+
+            // Show the injected page in preview
+            _currentPageIndex = lastPageIndex;
+            RenderCurrentPage();
+            UpdateButtonStates();
+
+            MessageBox.Show(
+                $"QR Code injected on last page (page {lastPageIndex + 1}), lower-right corner.\n\nEmbedded Data:\n{qrData}",
                 "QR Code Injected",
                 MessageBoxButtons.OK, MessageBoxIcon.Information);
         }

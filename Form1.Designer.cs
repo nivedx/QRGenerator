@@ -38,6 +38,7 @@ partial class Form1
         btnSelectPage = new Button();
         lblSelectedPage = new Label();
         btnInjectQR = new Button();
+        btnQuickInject = new Button();
         btnSavePDF = new Button();
         panelPreview.SuspendLayout();
         ((System.ComponentModel.ISupportInitialize)pictureBoxPreview).BeginInit();
@@ -131,12 +132,22 @@ partial class Form1
         lblSelectedPage.Text = "No page selected";
         lblSelectedPage.TextAlign = ContentAlignment.MiddleCenter;
 
+        // btnQuickInject
+        btnQuickInject.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
+        btnQuickInject.Location = new Point(498, 605);
+        btnQuickInject.Name = "btnQuickInject";
+        btnQuickInject.Size = new Size(140, 35);
+        btnQuickInject.TabIndex = 8;
+        btnQuickInject.Text = "Quick Inject";
+        btnQuickInject.UseVisualStyleBackColor = true;
+        btnQuickInject.Click += BtnQuickInject_Click;
+
         // btnInjectQR
         btnInjectQR.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
         btnInjectQR.Location = new Point(648, 605);
         btnInjectQR.Name = "btnInjectQR";
         btnInjectQR.Size = new Size(140, 35);
-        btnInjectQR.TabIndex = 8;
+        btnInjectQR.TabIndex = 9;
         btnInjectQR.Text = "Inject QR Code";
         btnInjectQR.UseVisualStyleBackColor = true;
         btnInjectQR.Click += BtnInjectQR_Click;
@@ -146,7 +157,7 @@ partial class Form1
         btnSavePDF.Location = new Point(800, 605);
         btnSavePDF.Name = "btnSavePDF";
         btnSavePDF.Size = new Size(120, 35);
-        btnSavePDF.TabIndex = 9;
+        btnSavePDF.TabIndex = 10;
         btnSavePDF.Text = "Save PDF";
         btnSavePDF.UseVisualStyleBackColor = true;
         btnSavePDF.Click += BtnSavePDF_Click;
@@ -163,6 +174,7 @@ partial class Form1
         Controls.Add(btnNextPage);
         Controls.Add(btnSelectPage);
         Controls.Add(lblSelectedPage);
+        Controls.Add(btnQuickInject);
         Controls.Add(btnInjectQR);
         Controls.Add(btnSavePDF);
         MinimumSize = new Size(800, 600);
@@ -185,5 +197,6 @@ partial class Form1
     private Button btnSelectPage;
     private Label lblSelectedPage;
     private Button btnInjectQR;
+    private Button btnQuickInject;
     private Button btnSavePDF;
 }
