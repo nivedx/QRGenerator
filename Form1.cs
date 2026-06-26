@@ -331,26 +331,19 @@ public partial class Form1 : Form
     private async void BtnInjectQR_Click(object? sender, EventArgs e)
     {
         if (_pdfBytes == null || _selectedPageIndex < 0 || !_isAreaSelected) return;
-        if (!chkLocalMode.Checked && !ValidateOneDriveSettings()) return;
+        if (!ValidateOneDriveSettings()) return;
         await PerformInjectionAsync(isQuickInject: false);
     }
 
     private async void BtnQuickInject_Click(object? sender, EventArgs e)
     {
         if (_pdfBytes == null) return;
-        if (!chkLocalMode.Checked && !ValidateOneDriveSettings()) return;
+        if (!ValidateOneDriveSettings()) return;
         await PerformInjectionAsync(isQuickInject: true);
     }
 
     private async Task PerformInjectionAsync(bool isQuickInject)
     {
-        // Local mode: inject a placeholder QR with no OneDrive upload.
-        if (chkLocalMode.Checked)
-        {
-            await PerformLocalInjectionAsync(isQuickInject);
-            return;
-        }
-
         string? tempQrPath = null;
         _isUploading = true;
         UpdateButtonStates();
@@ -425,48 +418,6 @@ public partial class Form1 : Form
             if (tempQrPath != null && File.Exists(tempQrPath))
                 try { File.Delete(tempQrPath); } catch { }
         }
-    }
-
-    // Local-mode injection: generates a placeholder QR and injects with no OneDrive calls.
-    private async Task PerformLocalInjectionAsync(bool isQuickInject)
-    {
-        string? tempQrPath = null;
-        try
-        {
-            _generatedGuid = Guid.NewGuid().ToString();
-            var placeholderUrl = $"https://verify.example.com/{_generatedGuid}";
-
-            using var qrGenerator = new QRCodeGenerator();
-            using var qrCodeData  = qrGenerator.CreateQrCode(placeholderUrl, QRCodeGenerator.ECCLevel.Q);
-            using var qrCode      = new QRCode(qrCodeData);
-            using var qrBitmap    = qrCode.GetGraphic(20);
-            tempQrPath = Path.Combine(Path.GetTempPath(), $"qr_{Guid.NewGuid()}.png");
-            qrBitmap.Save(tempQrPath, ImageFormat.Png);
-
-            _pdfBytes = InjectQrIntoPdf(tempQrPath, isQuickInject, out int targetPageIndex);
-            _qrInjected        = true;
-            _selectedPageIndex = targetPageIndex;
-            _currentPageIndex  = targetPageIndex;
-            RenderCurrentPage();
-            UpdateButtonStates();
-
-            MessageBox.Show(
-                $"QR injected (local mode — no OneDrive upload).\n\nPlaceholder URL in QR:\n{placeholderUrl}",
-                "Local Inject Complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
-        }
-        catch (Exception ex)
-        {
-            if (!_qrInjected) _generatedGuid = null;
-            MessageBox.Show($"Error: {ex.Message}", "Error",
-                MessageBoxButtons.OK, MessageBoxIcon.Error);
-        }
-        finally
-        {
-            if (tempQrPath != null && File.Exists(tempQrPath))
-                try { File.Delete(tempQrPath); } catch { }
-        }
-
-        await Task.CompletedTask;
     }
 
     // Synchronous helper — opens the PDF, draws the QR, returns the new byte array.

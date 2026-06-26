@@ -30,7 +30,6 @@ partial class Form1
     {
         btnSelectPDF = new Button();
         lblFileName = new Label();
-        chkLocalMode = new CheckBox();
         btnSettings = new Button();
         panelPreview = new Panel();
         pictureBoxPreview = new PictureBox();
@@ -58,19 +57,10 @@ partial class Form1
         // lblFileName
         lblFileName.Location = new Point(140, 12);
         lblFileName.Name = "lblFileName";
-        lblFileName.Size = new Size(460, 35);
+        lblFileName.Size = new Size(628, 35);
         lblFileName.TabIndex = 1;
         lblFileName.Text = "No file selected";
         lblFileName.TextAlign = ContentAlignment.MiddleLeft;
-
-        // chkLocalMode
-        chkLocalMode.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-        chkLocalMode.Location = new Point(612, 17);
-        chkLocalMode.Name = "chkLocalMode";
-        chkLocalMode.Size = new Size(160, 22);
-        chkLocalMode.TabIndex = 12;
-        chkLocalMode.Text = "Local mode (no OneDrive)";
-        chkLocalMode.UseVisualStyleBackColor = true;
 
         // btnSettings
         btnSettings.Anchor = AnchorStyles.Top | AnchorStyles.Right;
@@ -189,7 +179,6 @@ partial class Form1
         ClientSize = new Size(984, 651);
         Controls.Add(btnSelectPDF);
         Controls.Add(lblFileName);
-        Controls.Add(chkLocalMode);
         Controls.Add(btnSettings);
         Controls.Add(panelPreview);
         Controls.Add(btnPrevPage);
@@ -223,5 +212,4 @@ partial class Form1
     private Button btnQuickInject;
     private Button btnSavePDF;
     private Button btnSettings;
-    private CheckBox chkLocalMode;
 }
