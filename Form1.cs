@@ -435,10 +435,14 @@ public partial class Form1 : Form
             using var gfx  = XGraphics.FromPdfPage(page);
             using var xImg = XImage.FromFile(tempQrPath);
             const double qrSize = 80, margin = 20;
-            gfx.DrawImage(xImg,
-                page.Width.Point  - qrSize - margin,
-                page.Height.Point - qrSize - margin,
-                qrSize, qrSize);
+
+            // Use visual (displayed) dimensions so the QR lands at the visible
+            // bottom-right regardless of whether the page has a /Rotate entry.
+            double visW = VisualWidth(page);
+            double visH = VisualHeight(page);
+            var (rx, ry, rw, rh) = ToRawRect(page,
+                visW - qrSize - margin, visH - qrSize - margin, qrSize, qrSize);
+            gfx.DrawImage(xImg, rx, ry, rw, rh);
         }
         else
         {
@@ -446,18 +450,53 @@ public partial class Form1 : Form
             var page = document.Pages[targetPageIndex];
             using var gfx  = XGraphics.FromPdfPage(page);
             using var xImg = XImage.FromFile(tempQrPath);
-            double scaleX = page.Width.Point  / _selectedAreaImageSize.Width;
-            double scaleY = page.Height.Point / _selectedAreaImageSize.Height;
-            gfx.DrawImage(xImg,
-                _selectedAreaInImage.X      * scaleX,
-                _selectedAreaInImage.Y      * scaleY,
-                _selectedAreaInImage.Width  * scaleX,
-                _selectedAreaInImage.Height * scaleY);
+
+            // Scale the user's image-pixel selection to visual PDF points, then
+            // rotate those coordinates into the raw PDFsharp coordinate space.
+            double scaleX = VisualWidth(page)  / _selectedAreaImageSize.Width;
+            double scaleY = VisualHeight(page) / _selectedAreaImageSize.Height;
+            double dx = _selectedAreaInImage.X     * scaleX;
+            double dy = _selectedAreaInImage.Y     * scaleY;
+            double dw = _selectedAreaInImage.Width * scaleX;
+            double dh = _selectedAreaInImage.Height * scaleY;
+
+            var (rx, ry, rw, rh) = ToRawRect(page, dx, dy, dw, dh);
+            gfx.DrawImage(xImg, rx, ry, rw, rh);
         }
 
         using var output = new MemoryStream();
         document.Save(output);
         return output.ToArray();
+    }
+
+    // Visual (displayed) page width in points — swapped when /Rotate is 90 or 270.
+    private static double VisualWidth(PdfSharp.Pdf.PdfPage page) =>
+        page.Rotate is 90 or 270 ? page.Height.Point : page.Width.Point;
+
+    // Visual (displayed) page height in points — swapped when /Rotate is 90 or 270.
+    private static double VisualHeight(PdfSharp.Pdf.PdfPage page) =>
+        page.Rotate is 90 or 270 ? page.Width.Point : page.Height.Point;
+
+    // Transforms a rectangle expressed in visual/displayed PDF-point coordinates
+    // (top-left origin, Y downward) into the raw PDFsharp drawing coordinate space,
+    // accounting for the page's /Rotate entry (clockwise degrees).
+    //
+    // Derivation: for each rotation angle, corners are mapped as follows —
+    //   Rotate 90  CW: raw(x,y) = (dy,      H−dx−dw),  raw w/h swapped
+    //   Rotate 180 CW: raw(x,y) = (W−dx−dw, H−dy−dh),  same size
+    //   Rotate 270 CW: raw(x,y) = (W−dy−dh, dx),        raw w/h swapped
+    private static (double x, double y, double w, double h) ToRawRect(
+        PdfSharp.Pdf.PdfPage page, double dx, double dy, double dw, double dh)
+    {
+        double W = page.Width.Point;
+        double H = page.Height.Point;
+        return page.Rotate switch
+        {
+             90 => (dy,          H - dx - dw, dh, dw),
+            180 => (W - dx - dw, H - dy - dh, dw, dh),
+            270 => (W - dy - dh, dx,           dh, dw),
+            _   => (dx,          dy,           dw, dh),
+        };
     }
 
     // ── Save ───────────────────────────────────────────────────────────────
