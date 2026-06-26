@@ -36,8 +36,10 @@ public sealed class OneDriveUploader : IDisposable
 
     // Uploads pdfBytes to OneDrive and returns the Graph item ID of the uploaded file.
     // Suitable for PDFs up to ~4 MB (Graph API single-request limit).
+    // Set forceOverwrite=true on re-uploads: adds If-Match: * to bypass eTag checks that
+    // arise when the file's metadata was modified (e.g. by createLink) between uploads.
     public async Task<string> UploadPdfAsync(string token, string userEmail, string targetFolder,
-        string fileName, byte[] pdfBytes)
+        string fileName, byte[] pdfBytes, bool forceOverwrite = false)
     {
         var folder = targetFolder.Trim('/');
         var path   = string.IsNullOrWhiteSpace(folder) ? fileName : $"{folder}/{fileName}";
@@ -49,6 +51,9 @@ public sealed class OneDriveUploader : IDisposable
         };
         req.Headers.Authorization       = new AuthenticationHeaderValue("Bearer", token);
         req.Content.Headers.ContentType = new MediaTypeHeaderValue("application/pdf");
+
+        if (forceOverwrite)
+            req.Headers.Add("If-Match", "*");
 
         var resp = await _http.SendAsync(req);
         var raw  = await resp.Content.ReadAsStringAsync();
