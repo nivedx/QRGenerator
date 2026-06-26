@@ -29,6 +29,7 @@ partial class Form1
     private void InitializeComponent()
     {
         btnSelectPDF = new Button();
+        btnReset = new Button();
         lblFileName = new Label();
         btnSettings = new Button();
         panelPreview = new Panel();
@@ -54,10 +55,19 @@ partial class Form1
         btnSelectPDF.UseVisualStyleBackColor = true;
         btnSelectPDF.Click += BtnSelectPDF_Click;
 
+        // btnReset
+        btnReset.Location = new Point(140, 12);
+        btnReset.Name = "btnReset";
+        btnReset.Size = new Size(75, 35);
+        btnReset.TabIndex = 13;
+        btnReset.Text = "Reset";
+        btnReset.UseVisualStyleBackColor = true;
+        btnReset.Click += BtnReset_Click;
+
         // lblFileName
-        lblFileName.Location = new Point(140, 12);
+        lblFileName.Location = new Point(223, 12);
         lblFileName.Name = "lblFileName";
-        lblFileName.Size = new Size(628, 35);
+        lblFileName.Size = new Size(545, 35);
         lblFileName.TabIndex = 1;
         lblFileName.Text = "No file selected";
         lblFileName.TextAlign = ContentAlignment.MiddleLeft;
@@ -178,6 +188,7 @@ partial class Form1
         AutoScaleMode = AutoScaleMode.Font;
         ClientSize = new Size(984, 651);
         Controls.Add(btnSelectPDF);
+        Controls.Add(btnReset);
         Controls.Add(lblFileName);
         Controls.Add(btnSettings);
         Controls.Add(panelPreview);
@@ -212,4 +223,5 @@ partial class Form1
     private Button btnQuickInject;
     private Button btnSavePDF;
     private Button btnSettings;
+    private Button btnReset;
 }

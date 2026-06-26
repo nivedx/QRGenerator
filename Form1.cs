@@ -43,6 +43,7 @@ public partial class Form1 : Form
     private void UpdateButtonStates()
     {
         btnSelectPDF.Enabled   = !_isUploading;
+        btnReset.Enabled       = !_isUploading && _pdfBytes != null;
         btnSettings.Enabled    = !_isUploading;
         btnSelectPage.Enabled  = !_isUploading && _pdfBytes != null;
         btnInjectQR.Enabled    = !_isUploading && _pdfBytes != null && _selectedPageIndex >= 0 && _isAreaSelected && !_qrInjected;
@@ -68,6 +69,38 @@ public partial class Form1 : Form
         if (_isSelectingArea)
             return $"Page {_selectedPageIndex + 1} – Draw QR area";
         return $"Selected: Page {_selectedPageIndex + 1}";
+    }
+
+    // ── Reset ──────────────────────────────────────────────────────────────
+
+    private void BtnReset_Click(object? sender, EventArgs e)
+    {
+        if (_qrInjected)
+        {
+            var confirm = MessageBox.Show(
+                "The current document has an injected QR code that has not been saved.\n\nReset anyway?",
+                "Confirm Reset", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+            if (confirm != DialogResult.Yes) return;
+        }
+
+        pictureBoxPreview.Image?.Dispose();
+        pictureBoxPreview.Image  = null;
+        pictureBoxPreview.Cursor = Cursors.Default;
+
+        _pdfBytes          = null;
+        _originalFileName  = null;
+        _currentPageIndex  = 0;
+        _totalPages        = 0;
+        _selectedPageIndex = -1;
+        _generatedGuid     = null;
+        _qrInjected        = false;
+        _isSelectingArea   = false;
+        _isDragging        = false;
+        _isAreaSelected    = false;
+
+        lblFileName.Text = "No file selected";
+        UpdateButtonStates();
+        pictureBoxPreview.Invalidate();
     }
 
     // ── PDF loading ────────────────────────────────────────────────────────
