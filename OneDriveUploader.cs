@@ -34,12 +34,10 @@ public sealed class OneDriveUploader : IDisposable
         return tok.GetString()!;
     }
 
-    // Uploads pdfBytes to OneDrive and returns the Graph item ID of the uploaded file.
+    // Uploads pdfBytes to OneDrive via the path-based endpoint and returns the Graph item ID.
     // Suitable for PDFs up to ~4 MB (Graph API single-request limit).
-    // Set forceOverwrite=true on re-uploads: adds If-Match: * to bypass eTag checks that
-    // arise when the file's metadata was modified (e.g. by createLink) between uploads.
     public async Task<string> UploadPdfAsync(string token, string userEmail, string targetFolder,
-        string fileName, byte[] pdfBytes, bool forceOverwrite = false)
+        string fileName, byte[] pdfBytes)
     {
         var folder = targetFolder.Trim('/');
         var path   = string.IsNullOrWhiteSpace(folder) ? fileName : $"{folder}/{fileName}";
@@ -52,9 +50,6 @@ public sealed class OneDriveUploader : IDisposable
         req.Headers.Authorization       = new AuthenticationHeaderValue("Bearer", token);
         req.Content.Headers.ContentType = new MediaTypeHeaderValue("application/pdf");
 
-        if (forceOverwrite)
-            req.Headers.Add("If-Match", "*");
-
         var resp = await _http.SendAsync(req);
         var raw  = await resp.Content.ReadAsStringAsync();
 
@@ -64,6 +59,29 @@ public sealed class OneDriveUploader : IDisposable
 
         using var doc = JsonDocument.Parse(raw);
         return doc.RootElement.GetProperty("id").GetString()!;
+    }
+
+    // Replaces the content of an existing OneDrive item addressed by its Graph item ID.
+    // Uses the /items/{id}/content endpoint so path-resolution ETag conflicts — which
+    // occur when createLink modifies the item's metadata between the initial upload and
+    // this re-upload — cannot arise. No conditional header is required.
+    public async Task ReplaceContentAsync(string token, string userEmail, string itemId, byte[] pdfBytes)
+    {
+        var url = $"{GraphBase}/users/{userEmail}/drive/items/{itemId}/content";
+
+        using var req = new HttpRequestMessage(HttpMethod.Put, url)
+        {
+            Content = new ByteArrayContent(pdfBytes)
+        };
+        req.Headers.Authorization       = new AuthenticationHeaderValue("Bearer", token);
+        req.Content.Headers.ContentType = new MediaTypeHeaderValue("application/pdf");
+
+        var resp = await _http.SendAsync(req);
+        var raw  = await resp.Content.ReadAsStringAsync();
+
+        if (!resp.IsSuccessStatusCode)
+            throw new InvalidOperationException(
+                $"Upload failed ({(int)resp.StatusCode} {resp.StatusCode}): {raw}");
     }
 
     // Creates an anonymous view-only shareable link for the given OneDrive item.

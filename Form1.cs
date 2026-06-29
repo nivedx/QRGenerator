@@ -414,14 +414,13 @@ public partial class Form1 : Form
             _currentPageIndex  = targetPageIndex;
             RenderCurrentPage();
 
-            // Step 5: Re-upload the QR-stamped PDF, overwriting the placeholder on OneDrive.
-            // forceOverwrite=true adds If-Match: * to avoid 409 eTag conflicts caused by
-            // the createLink call in Step 2 modifying the file's metadata between uploads.
+            // Step 5: Re-upload the QR-stamped PDF by item ID, overwriting the placeholder.
+            // Using the item-ID endpoint avoids the 412 ETag conflict that the path-based
+            // endpoint returns after createLink modifies the item's metadata in step 2.
             try
             {
-                await uploader.UploadPdfAsync(
-                    token, _settings.UserEmail, _settings.TargetFolder, fileName, _pdfBytes,
-                    forceOverwrite: true);
+                await uploader.ReplaceContentAsync(
+                    token, _settings.UserEmail, itemId, _pdfBytes);
 
                 MessageBox.Show(
                     $"QR stamped and document published to OneDrive.\n\n" +
